@@ -117,9 +117,9 @@ def dropif(values: List[T], condition: Callable[[T, int], bool]) -> List[T]:
 # Convert timescale of data to a lower resolution (downsamlping)
 def downsample(values: List[T], old: str, new: str) -> List[T]:
     oldscale = old[-1]
-    oldfactor = int(old[:-1])
+    oldfactor = int(old[:-1]) if len(old) > 1 else 1
     newscale = new[-1]
-    newfactor = int(new[:-1])
+    newfactor = int(new[:-1]) if len(new) > 1 else 1
 
     if oldscale == 'm' and newscale == 'h':
         step = 60 * newfactor / oldfactor
@@ -179,6 +179,7 @@ def inter(a: float, b: float, points: int = 1) -> List[float]:
 # Statistics #
 ##############
 
+# Probability density function
 def pdf(values: List[float]) -> List[float]:
     if len(values) == 0:
         raise ValueError('List must be non-empty')
