@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Tuple, Callable, TypeVar, Any
+import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import csv
@@ -7,6 +8,7 @@ import math
 import statistics
 
 T = TypeVar('T')
+R = TypeVar('R')
 
 ##########
 # Config #
@@ -14,32 +16,54 @@ T = TypeVar('T')
 
 ALLOW_INFINITY = False
 WARN_INFINITY = True
-
 DATA_PATH = './'
 
 #######################
 # Warnings and Errors #
 #######################
 
-def _WARN_INFINITY(override: bool = False):
-    if WARN_INFINITY:
-        warnings.warn('An infinite value was produced'
-                      '\nTo disable this warning, use \'WARN_INFINITY = False\''
-        , UserWarning)
-    elif override:
-        warnings.warn('An infinite value was produced'
-                      '\n(This is a forced warning and cannot be disabled)'
-        , UserWarning)
+def _WARN_INFINITY(override: bool = False) -> None:
+    """
+    Internal helper to issue a warning when an infinite value is produced.
 
-def _ERROR_INFINITY(override: bool = False):
-    if not ALLOW_INFINITY:
-        raise ValueError('An infinite value was produced'
-                         '\nTo allow infinities and disable this error message, use \'ALLOW_INFINITY = True\''
+    Parameters:
+        override (bool): If True, force the warning even if WARN_INFINITY is False.
+    """
+    if WARN_INFINITY:
+        warnings.warn(
+            'An infinite value was produced'
+            '\nTo disable this warning, use \'WARN_INFINITY = False\'',
+            UserWarning
         )
     elif override:
-        warnings.warn('An infinite value was produced'
-                      '\n(This is a forced error message and cannot be disabled)'
-        , UserWarning)
+        warnings.warn(
+            'An infinite value was produced'
+            '\n(This is a forced warning and cannot be disabled)',
+            UserWarning
+        )
+
+
+def _ERROR_INFINITY(override: bool = False) -> None:
+    """
+    Internal helper to raise an error when an infinite value is produced.
+
+    Parameters:
+        override (bool): If True, force an error even if ALLOW_INFINITY is True.
+
+    Raises:
+        ValueError: When infinite values are not allowed.
+    """
+    if not ALLOW_INFINITY:
+        raise ValueError(
+            'An infinite value was produced'
+            '\nTo allow infinities and disable this error message, use \'ALLOW_INFINITY = True\''
+        )
+    elif override:
+        warnings.warn(
+            'An infinite value was produced'
+            '\n(This is a forced error message and cannot be disabled)',
+            UserWarning
+        )
 
 ##################
 # Data Structure #
@@ -47,6 +71,18 @@ def _ERROR_INFINITY(override: bool = False):
 
 @dataclass
 class Candle:
+    """
+    Represents a single OHLC (Open-High-Low-Close) data point.
+
+    Attributes:
+        date (str): Date of the candle in DD-MM-YYYY format.
+        time (str): Time of the candle in HH:MM:SS format.
+        open (float): Opening price.
+        high (float): Highest price.
+        low (float): Lowest price.
+        close (float): Closing price.
+        volume (float): Volume traded.
+    """
     date:   str  # DD-MM-YYYY
     time:   str  # HH:MM:SS
     open:   float
@@ -55,8 +91,25 @@ class Candle:
     close:  float
     volume: float
 
-class OHLC():
-    def __init__(self, ticker: str, timescale: str = None):
+
+class OHLC:
+    """
+    Loads OHLC data from a CSV file and stores it in lists.
+
+    Attributes:
+        ticker (str): Ticker symbol.
+        timescale (str): Timescale of the data (e.g., '1m', '1h').
+        candles (List[Candle]): List of Candle objects.
+        dates, times, opens, highs, lows, closes, volumes (List): Separate lists of each candle attribute.
+    """
+    def __init__(self, ticker: str, timescale: str = None) -> None:
+        """
+        Initialize the OHLC dataset by reading from '{ticker}.csv'.
+
+        Parameters:
+            ticker (str): Symbol to load (expects a CSV named '<ticker>.csv').
+            timescale (str, optional): Resolution of data.
+        """
         self.ticker = ticker
         self.timescale = timescale
         self.candles = []
@@ -72,8 +125,8 @@ class OHLC():
         with open(filename, newline='') as f:
             for row in csv.DictReader(f):
                 candle = Candle(
-                    date   = 'ignore for now', #row['Date'],
-                    time   = 'ignore for now', #row['Time'],
+                    date   = 'ignore for now', #row['Date']
+                    time   = 'ignore for now', #row['Time']
                     open   = float(row['Open']),
                     high   = float(row['High']),
                     low    = float(row['Low']),
@@ -93,8 +146,21 @@ class OHLC():
 # Data Manipulation #
 #####################
 
-# Drop values not within n standard deviations from the mean
+
 def dropsd(values: List[float], n: float = 1.5) -> List[float]:
+    """
+    Remove values outside n standard deviations from the mean.
+
+    Parameters:
+        values (List[float]): Input list of numbers.
+        n (float): Number of standard deviations for filtering (must be >=0).
+
+    Returns:
+        List[float]: Filtered list of values within the specified range.
+
+    Raises:
+        ValueError: If n is negative.
+    """
     if n < 0:
         raise ValueError('Cannot have negative n value')
 
@@ -106,16 +172,40 @@ def dropsd(values: List[float], n: float = 1.5) -> List[float]:
             keep.append(value)
     return keep
 
-# Drop values that do not satisfy condition
+
 def dropif(values: List[T], condition: Callable[[T, int], bool]) -> List[T]:
+    """
+    Remove items from a list based on a condition.
+
+    Parameters:
+        values (List[T]): Input list.
+        condition (Callable[[T, int], bool]): Function returning True to keep an item.
+
+    Returns:
+        List[T]: Filtered list of values that satisfy the condition.
+    """
     keep = []
     for i in range(len(values)):
-        if condition(value[i], i):
-            keep.append(value)
+        if condition(values[i], i):
+            keep.append(values[i])
     return keep
 
-# Convert timescale of data to a lower resolution (downsamlping)
+
 def downsample(values: List[T], old: str, new: str) -> List[T]:
+    """
+    Convert data to lower resolution (downsampling).
+
+    Parameters:
+        values (List[T]): Input data points.
+        old (str): Original timescale (e.g., '1m', '2h').
+        new (str): Desired lower resolution (e.g., '1h', '1d').
+
+    Returns:
+        List[T]: Downsampled list of values.
+
+    Raises:
+        ValueError: If conversion between scales is not supported.
+    """
     oldscale = old[-1]
     oldfactor = int(old[:-1]) if len(old) > 1 else 1
     newscale = new[-1]
@@ -127,15 +217,31 @@ def downsample(values: List[T], old: str, new: str) -> List[T]:
         step = 24 * newfactor / oldfactor
     elif oldscale == 'm' and newscale == 'd':
         step = 60 * 24 * newfactor / oldfactor
+    elif oldscale == newscale and (oldscale == 'm' or oldscale == 'h' or oldscale == 'd'):
+        step = newfactor / oldfactor
+        if step < 1:
+            raise ValueError(f'Cannot convert from timescale \'{old}\' to \'{new}\'')
     else:
-        raise ValueError(f'Cannot convert from timescale \'{old}\' to \'{new}\''
-                         f'\nValid timescales are multiples of \'m\', \'h\' and \'d\''
-                         f'\nYou cannot convert from a lower to higher resolution timescale')
+        raise ValueError(f'Cannot convert from timescale \'{old}\' to \'{new}\'')
 
     return [values[i] for i in range(0, len(values), int(step))]
 
-# Set the size of a list using linear interpolation
+
 def setLen(base: List[T], newsize: int) -> List[T]:
+    """
+    Resize a list using linear interpolation and repetition.
+
+    Parameters:
+        base (List[T]): Original list.
+        newsize (int): Desired length (must be non-negative).
+
+    Returns:
+        List[T]: Resized list of length newsize.
+
+    Raises:
+        ValueError: If base is empty or newsize is negative.
+        NotImplementedError: If downscaling is requested.
+    """
     if len(base) == 0:
         raise ValueError('Cannot change length of an empty list')
     if newsize < 0:
@@ -144,7 +250,7 @@ def setLen(base: List[T], newsize: int) -> List[T]:
     scale = newsize / len(base)
 
     if scale < 1:
-        # TODO: handle when len(base) > len(reference)
+        # TODO: handle when len(base) > newsize
         raise NotImplementedError
 
     stretched = []
@@ -156,10 +262,14 @@ def setLen(base: List[T], newsize: int) -> List[T]:
     stretched.append(base[-1])
 
     j = 0
+    remaining = newsize - len(stretched)
+    incr = int(len(stretched) / remaining)
+
+    print(incr)
+
     while len(stretched) < newsize:
-        index = j % len(stretched)
-        stretched.insert(index, stretched[index])
-        j += whole
+        stretched.insert(incr * j + 1, inter(stretched[incr * j], stretched[incr * j + 1], 1)[0])
+        j += 2
 
     return stretched
 
@@ -167,8 +277,22 @@ def setLen(base: List[T], newsize: int) -> List[T]:
 # Algebra #
 ###########
 
-# Linear interpolation, get specified number of internal points
+
 def inter(a: float, b: float, points: int = 1) -> List[float]:
+    """
+    Generate points between a and b via linear interpolation.
+
+    Parameters:
+        a (float): Start value.
+        b (float): End value.
+        points (int): Number of points to generate between a and b.
+
+    Returns:
+        List[float]: List of interpolated values.
+
+    Raises:
+        ValueError: If points is negative.
+    """
     if points < 0:
         raise ValueError('Number of internal points cannot be less than 0')
 
@@ -179,8 +303,20 @@ def inter(a: float, b: float, points: int = 1) -> List[float]:
 # Statistics #
 ##############
 
-# Probability density function
+
 def pdf(values: List[float]) -> List[float]:
+    """
+    Compute the probability density function (Gaussian) normalized over the data.
+
+    Parameters:
+        values (List[float]): Data points.
+
+    Returns:
+        List[float]: Normalized PDF values summing to 1.
+
+    Raises:
+        ValueError: If values list is empty.
+    """
     if len(values) == 0:
         raise ValueError('List must be non-empty')
 
@@ -190,22 +326,59 @@ def pdf(values: List[float]) -> List[float]:
     probs = pdf_vals / pdf_vals.sum()
     return probs.tolist()
 
-# Sample standard distribution
+
 def sd(values: List[float]) -> float:
+    """
+    Compute the sample standard deviation.
+
+    Parameters:
+        values (List[float]): Data points.
+
+    Returns:
+        float: Sample standard deviation.
+
+    Raises:
+        ValueError: If values list is empty.
+    """
     if len(values) == 0:
         raise ValueError('List must be non-empty')
 
     return statistics.stdev(values)
 
-# Mean
+
 def mean(values: List[float]) -> float:
+    """
+    Compute the arithmetic mean.
+
+    Parameters:
+        values (List[float]): Data points.
+
+    Returns:
+        float: Mean of the values.
+
+    Raises:
+        ValueError: If values list is empty.
+    """
     if len(values) == 0:
         raise ValueError('List must be non-empty')
 
     return sum(values) / len(values)
 
-# Correlation
+
 def corr(x: List[float], y: List[float]) -> float:
+    """
+    Compute Pearson correlation coefficient between two lists.
+
+    Parameters:
+        x (List[float]): First data series.
+        y (List[float]): Second data series (same length as x).
+
+    Returns:
+        float: Correlation coefficient.
+
+    Raises:
+        ValueError: If lists differ in length or are empty.
+    """
     if len(x) != len(y):
         raise ValueError('Lists must be of the same length')
     if len(x) == 0:
@@ -217,8 +390,20 @@ def corr(x: List[float], y: List[float]) -> float:
 # Price Trend Analysis #
 ########################
 
-# Log returns
+
 def logReturns(prices: List[float]) -> List[float]:
+    """
+    Compute log returns for a series of prices.
+
+    Parameters:
+        prices (List[float]): List of price data.
+
+    Returns:
+        List[float]: Log returns between consecutive prices.
+
+    Raises:
+        ValueError: If fewer than 2 prices or a zero price encountered when infinities not allowed.
+    """
     if len(prices) < 2:
         raise ValueError('List must contain at least 2 elements')
 
@@ -235,8 +420,20 @@ def logReturns(prices: List[float]) -> List[float]:
 
     return returns
 
-# Arithmetic returns
+
 def ariReturns(prices: List[float]) -> List[float]:
+    """
+    Compute arithmetic returns for a series of prices.
+
+    Parameters:
+        prices (List[float]): List of price data.
+
+    Returns:
+        List[float]: Arithmetic returns between consecutive prices.
+
+    Raises:
+        ValueError: If fewer than 2 prices or a zero price encountered when infinities not allowed.
+    """
     if len(prices) < 2:
         raise ValueError('List must contain at least 2 elements')
 
@@ -253,8 +450,21 @@ def ariReturns(prices: List[float]) -> List[float]:
 
     return returns
 
-# Log return
+
 def logReturn(old: float, new: float) -> float:
+    """
+    Compute single-period log return.
+
+    Parameters:
+        old (float): Previous price.
+        new (float): Current price.
+
+    Returns:
+        float: Logarithmic return.
+
+    Raises:
+        ValueError: If old price is zero when infinities not allowed.
+    """
     if old == 0:
         if ALLOW_INFINITY:
             _WARN_INFINITY()
@@ -262,10 +472,23 @@ def logReturn(old: float, new: float) -> float:
         else:
             _ERROR_INFINITY()
 
-    return new / old
+    return math.log(new / old)
 
-# Arithmetic return
+
 def ariReturn(old: float, new: float) -> float:
+    """
+    Compute single-period arithmetic return.
+
+    Parameters:
+        old (float): Previous price.
+        new (float): Current price.
+
+    Returns:
+        float: Arithmetic return.
+
+    Raises:
+        ValueError: If old price is zero when infinities not allowed.
+    """
     if old == 0:
         if ALLOW_INFINITY:
             _WARN_INFINITY()
@@ -275,7 +498,20 @@ def ariReturn(old: float, new: float) -> float:
 
     return (new - old) / old
 
+
 def cumReturns(prices: List[float]) -> List[float]:
+    """
+    Compute cumulative returns relative to the first price.
+
+    Parameters:
+        prices (List[float]): List of price data.
+
+    Returns:
+        List[float]: Cumulative return at each time step.
+
+    Raises:
+        ValueError: If fewer than 2 prices or first price is zero when infinities not allowed.
+    """
     if len(prices) < 2:
         raise ValueError('List must contain at least 2 elements')
     if prices[0] == 0:
@@ -287,9 +523,22 @@ def cumReturns(prices: List[float]) -> List[float]:
 
     return [(prices[i] - prices[0]) / prices[0] for i in range(len(prices))]
 
+
 def totReturn(prices: List[float]) -> float:
+    """
+    Compute total return from first to last price.
+
+    Parameters:
+        prices (List[float]): List of price data.
+
+    Returns:
+        float: Total return.
+
+    Raises:
+        ValueError: If fewer than 2 prices or first price is zero when infinities not allowed.
+    """
     if len(prices) < 2:
-        raise V('List must contain at least 2 elements')
+        raise ValueError('List must contain at least 2 elements')
     if prices[0] == 0:
         if ALLOW_INFINITY:
             _WARN_INFINITY()
@@ -303,8 +552,21 @@ def totReturn(prices: List[float]) -> float:
 # Groups #
 ##########
 
-# Get upper, lower bounds of n evenly-widthed groups.
+
 def grBounds(values: List[float], n: int) -> List[Tuple[float, float]]:
+    """
+    Calculate n equally spaced bounds for grouping values.
+
+    Parameters:
+        values (List[float]): Data points.
+        n (int): Number of groups (bins).
+
+    Returns:
+        List[Tuple[float, float]]: List of (lower, upper) bounds per group.
+
+    Raises:
+        ValueError: If n <= 0.
+    """
     if n <= 0:
         raise ValueError('Cannot have less than 1 bound')
 
@@ -313,8 +575,18 @@ def grBounds(values: List[float], n: int) -> List[Tuple[float, float]]:
 
     return [(inorder[0] + i * width, inorder[0] + (i + 1) * width) for i in range(n)]
 
-# Divide values into groups according to known bounds
+
 def grGet(values: List[float], bounds: List[Tuple[float, float]]) -> List[List[float]]:
+    """
+    Assign values to groups based on provided bounds.
+
+    Parameters:
+        values (List[float]): Data points.
+        bounds (List[Tuple[float, float]]): List of (low, high) bounds.
+
+    Returns:
+        List[List[float]]: Groups of values per bound.
+    """
     groups = []
     for bound in bounds:
         groups.append([])
@@ -326,8 +598,18 @@ def grGet(values: List[float], bounds: List[Tuple[float, float]]) -> List[List[f
 
     return groups
 
-# Get number of values in each group
+
 def grCount(values: List[float], bounds: List[Tuple[float, float]]) -> List[float]:
+    """
+    Count number of values in each group defined by bounds.
+
+    Parameters:
+        values (List[float]): Data points.
+        bounds (List[Tuple[float, float]]): List of (low, high) bounds.
+
+    Returns:
+        List[float]: Count per group.
+    """
     counts = []
     for bound in bounds:
         counts.append(0)
@@ -337,8 +619,19 @@ def grCount(values: List[float], bounds: List[Tuple[float, float]]) -> List[floa
 
     return counts
 
-# Get frequency of some event in each group
+
 def grFreq(values: List[float], bounds: List[Tuple[float, float]], event: Callable[[List[float], int], bool]) -> List[float]:
+    """
+    Count occurrences of an event per group.
+
+    Parameters:
+        values (List[float]): Data points.
+        bounds (List[Tuple[float, float]]): List of (low, high) bounds.
+        event (Callable[[List[float], int], bool]): Event function taking (values, index).
+
+    Returns:
+        List[float]: Number of events per group.
+    """
     counts = []
     for bound in bounds:
         counts.append(0)
@@ -349,8 +642,19 @@ def grFreq(values: List[float], bounds: List[Tuple[float, float]], event: Callab
 
     return counts
 
-# Get probabilites of some event in each group [Pr(event | group)]
+
 def grProb(values: List[float], bounds: List[Tuple[float, float]], event: Callable[[List[float], int], bool]) -> List[float]:
+    """
+    Compute probability of an event within each group.
+
+    Parameters:
+        values (List[float]): Data points.
+        bounds (List[Tuple[float, float]]): List of (low, high) bounds.
+        event (Callable[[List[float], int], bool]): Event function taking (values, index).
+
+    Returns:
+        List[float]: Probability per group (positive/total).
+    """
     positive = []
     total = []
     for bound in bounds:
@@ -364,23 +668,65 @@ def grProb(values: List[float], bounds: List[Tuple[float, float]], event: Callab
 
     return [positive[i] / (total[i] if total[i] > 0 else 1) for i in range(len(total))]
 
+#########
+# Tools #
+#########
+
+def rolWin(values: List[T], window: int, method: Callable[[List[T], int], R]) -> List[R]:
+    """
+    Iterate over a list with a rolling window and a custom method.
+
+    Parameters:
+        values (List[T]): Data points.
+        window (int: Number of elements in the window.
+        method (Callable[[List[T], int], R]): Custom method executed on each window.
+
+    Returns:
+        List[R]: List of outcomes from custom method over each window.
+
+    Raises:
+        ValueError: If window < 1.
+    """
+    if window < 1:
+        raise ValueError('Window cannot be smaller than 1')
+
+    outcomes = []
+    for i in range(len(values) - window):
+        outcomes.append(method(values[i * window : (i + 1) + window], i * window))
+
+    return outcomes
+
 #################
 # Visualisation #
 #################
 
 @dataclass
 class Aesthetics:
+    """
+    Aesthetic settings for plotting functions.
+
+    Attributes:
+        xlabel (str): Label for the x-axis.
+        ylabel (str): Label for the y-axis.
+        title  (str): Title of the plot.
+    """
     xlabel: str = 'x'
     ylabel: str = 'y'
     title: str  = 'Plot'
 
-def line(y: List[float], x: List[float] = [], aes: Aesthetics = None) -> None:
-    aes = Aesthetics(
-        title = 'Line Plot'
-    ) if aes == None else aes
 
-    x = [i for i in range(len(y))] if x == [] else x
-    x ,y = zip(*sorted(zip(x,y),key=lambda x: x[0]))
+def line(y: List[float], x: List[float] = None, aes: Aesthetics = None) -> None:
+    """
+    Create a line plot of y vs x.
+
+    Parameters:
+        y (List[float]): Y-values.
+        x (List[float], optional): X-values (defaults to index sequence).
+        aes (Aesthetics, optional): Plot styling options.
+    """
+    aes = aes or Aesthetics(title='Line Plot')
+    x = list(range(len(y))) if x is None else x
+    x, y = zip(*sorted(zip(x, y), key=lambda pair: pair[0]))
 
     plt.figure()
     plt.plot(x, y)
@@ -389,10 +735,17 @@ def line(y: List[float], x: List[float] = [], aes: Aesthetics = None) -> None:
     plt.title(aes.title)
     plt.show()
 
+
 def scat(y: List[float], x: List[float], aes: Aesthetics = None) -> None:
-    aes = Aesthetics(
-        title = 'Scatter Plot'
-    ) if aes == None else aes
+    """
+    Create a scatter plot of y vs x.
+
+    Parameters:
+        y (List[float]): Y-values.
+        x (List[float]): X-values.
+        aes (Aesthetics, optional): Plot styling options.
+    """
+    aes = aes or Aesthetics(title='Scatter Plot')
 
     plt.figure()
     plt.scatter(x, y)
@@ -401,12 +754,18 @@ def scat(y: List[float], x: List[float], aes: Aesthetics = None) -> None:
     plt.title(aes.title)
     plt.show()
 
+
 def hist(values: List[float], bins: int = 10, density: bool = False, aes: Aesthetics = None) -> None:
-    aes = Aesthetics(
-        title = 'Historgram',
-        xlabel = 'Value',
-        ylabel ='Density' if density else 'Frequency',
-    ) if aes == None else aes
+    """
+    Create a histogram of data values.
+
+    Parameters:
+        values (List[float]): Data to histogram.
+        bins (int): Number of histogram bins.
+        density (bool): If True, show probability density.
+        aes (Aesthetics, optional): Plot styling options.
+    """
+    aes = aes or Aesthetics(title='Histogram', xlabel='Value', ylabel='Density' if density else 'Frequency')
 
     plt.figure()
     plt.hist(values, bins=bins, density=density)
@@ -415,40 +774,46 @@ def hist(values: List[float], bins: int = 10, density: bool = False, aes: Aesthe
     plt.title(aes.title)
     plt.show()
 
+
 def histline(values: List[float], y: List[float], density: bool = False, aes: Aesthetics = None) -> None:
-    aes = Aesthetics(
-        xlabel='Value',
-        ylabel='Density' if density else 'Frequency',
-        title='Histogram + Line'
-    ) if aes == None else aes
+    """
+    Create a histogram with an overlaid line plot.
+
+    Parameters:
+        values (List[float]): Data to histogram.
+        y (List[float]): Line values to overlay.
+        density (bool): If True, normalize histogram.
+        aes (Aesthetics, optional): Plot styling options.
+    """
+    aes = aes or Aesthetics(title='Histogram + Line', xlabel='Value', ylabel='Density' if density else 'Frequency')
 
     bins = len(y)
-
-    groups = GB(values, bins)
-
+    groups = grBounds(values, bins)
     x = [(low + high) / 2 for low, high in groups]
 
     fig, ax1 = plt.subplots()
     ax1.hist(values, bins=bins, density=density)
     ax1.set_xlabel(aes.xlabel)
     ax1.set_ylabel(aes.ylabel)
-    ax1.tick_params(axis='y')
     ax1.set_title(aes.title)
 
     ax2 = ax1.twinx()
-    ax2.plot(x, y, color='C1')
+    ax2.plot(x, y)
     ax2.set_ylabel('Line Value')
-    ax2.tick_params(axis='y')
-
     fig.tight_layout()
     plt.show()
 
+
 def bar(x: List[T], heights: List[float], aes: Aesthetics = None) -> None:
-    aes = Aesthetics(
-        xlabel='Category',
-        ylabel='Value',
-        title='Bar Chart'
-    ) if aes == None else aes
+    """
+    Create a bar chart.
+
+    Parameters:
+        x (List[T]): Categories for bars.
+        heights (List[float]): Heights of bars.
+        aes (Aesthetics, optional): Plot styling options.
+    """
+    aes = aes or Aesthetics(title='Bar Chart', xlabel='Category', ylabel='Value')
 
     plt.figure()
     plt.bar(x, heights)
@@ -457,36 +822,42 @@ def bar(x: List[T], heights: List[float], aes: Aesthetics = None) -> None:
     plt.title(aes.title)
     plt.show()
 
+
 def distr(values: List[float], aes: Aesthetics = None) -> None:
-    aes = Aesthetics(
-        title = 'Distribution',
-        xlabel = 'Value',
-        ylabel = 'Probability'
-    ) if aes == None else aes
+    """
+    Plot the distribution (PDF) of values.
 
-    line(x=values, y=pdf(values), aes=aes)
+    Parameters:
+        values (List[float]): Data points.
+        aes (Aesthetics, optional): Plot styling options.
+    """
+    aes = aes or Aesthetics(title='Distribution', xlabel='Value', ylabel='Probability')
+    line(y=pdf(values), x=values, aes=aes)
 
-def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = [], aes: Aesthetics = None) -> None:
-    aes = Aesthetics(
-        title = 'Multiplot'
-    ) if aes == None else aes
 
-    x = [i for i in range(len(plots[0][1]))] if x == [] else x
+def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, aes: Aesthetics = None) -> None:
+    """
+    Plot multiple series on the same axes.
+
+    Parameters:
+        plots (List[Tuple[str, List[float]]]): List of (plot_type, data) tuples.
+        x (List[float], optional): Shared x-values (defaults to index).
+        aes (Aesthetics, optional): Plot styling options.
+
+    Raises:
+        ValueError: If plot type is invalid or data lengths mismatch x.
+    """
+    aes = aes or Aesthetics(title='Multiplot')
+    x = list(range(len(plots[0][1]))) if x is None else x
 
     plt.figure()
-
-    try:
-        for plot in plots:
-            if plot[0] == 'line':
-                plt.plot(x, plot[1])
-            elif plot[0] == 'scatter':
-                plt.scatter(x, plot[1])
-            else:
-                raise ValueError(f'{plot[1]} is not a valid plot for multiplot')
-    except ValueError as e:
-        print(e)
-        raise ValueError(f'At least one of your sets of y-coordinates does not have the same length as your x-coordinates'
-                         f'\nConsider using \'y = setLen(y, len(x))\' to resolve the issue')
+    for plot_type, data in plots:
+        if plot_type == 'line':
+            plt.plot(x, data)
+        elif plot_type == 'scatter':
+            plt.scatter(x, data)
+        else:
+            raise ValueError(f"'{plot_type}' is not a valid plot type for multiplot")
 
     plt.xlabel(aes.xlabel)
     plt.ylabel(aes.ylabel)
