@@ -1,10 +1,9 @@
 from pricepy import *
 
-thing = Ticker("AAPL")
+prices = OHLC("AAPL").closes
 
-lr = logReturns(thing.aslist("close"))
+hour_prices = downsample(prices, "1m", "1h")
 
-line(
-    x=lr,
-    y=pdf(lr)
-)
+corr(hour_prices, prices)
+multiplot([('line', prices), ('line', hour_prices)])
+
