@@ -2,7 +2,11 @@ data/
 .DS_Store
 __pycache__/
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 sphinx/
 >>>>>>> dev
+=======
+sphinx/
+>>>>>>> 83eba72d802653dae11541fca1e19408dcf24c37
 main.py
