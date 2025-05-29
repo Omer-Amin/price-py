@@ -1,14 +1,23 @@
+import re
 from dataclasses import dataclass, field
-from typing import List, Tuple, Callable, TypeVar, Any
+from typing import List, Tuple, Callable, TypeVar, Any, Union
+import pandas as pd
 import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import csv
 import math
 import statistics
+import matplotlib.dates as mdates
+from matplotlib.patches import Rectangle
+import matplotlib.ticker as mtick
+from dateutil import parser as date_parser
+from matplotlib.ticker import MaxNLocator
 
 T = TypeVar('T')
 R = TypeVar('R')
+
+_VOID_STRING = "_NA"
 
 ##########
 # Config #
@@ -94,73 +103,92 @@ class Candle:
 
 class OHLC:
     """
-    Loads OHLC data from a CSV file and stores it in lists.
+    Loads OHLC data from a CSV file or a pandas DataFrame and stores it in lists.
 
     Attributes:
-        ticker (str): Ticker symbol.
-        timescale (str): Timescale of the data (e.g., '1m', '1h').
+        source (Union[str, pd.DataFrame]): Either the ticker symbol (CSV file) or a DataFrame.
         candles (List[Candle]): List of Candle objects.
         dates, times, opens, highs, lows, closes, volumes (List): Separate lists of each candle attribute.
     """
-    def __init__(self, ticker: str, timescale: str = None) -> None:
+    def __init__(self, source: Union[str, pd.DataFrame], yf_format: bool = True) -> None:
         """
-        Initialize the OHLC dataset by reading from '{ticker}.csv'.
+        Initialize the OHLC dataset from either a CSV file ('<ticker>.csv') or a pandas DataFrame.
 
         Parameters:
-            ticker (str): Symbol to load (expects a CSV named '<ticker>.csv').
+            source (str or pd.DataFrame): If str, expects a CSV named '<source>.csv'; if DataFrame, uses it directly.
             timescale (str, optional): Resolution of data.
         """
-        self.ticker = ticker
-        self.timescale = timescale
-        self.candles = []
-        self.dates =   []
-        self.times =   []
-        self.opens =   []
-        self.highs =   []
-        self.lows  =   []
-        self.closes =  []
-        self.volumes = []
+        self.source = source
+        self.candles: List[Candle] = []
+        self.dates:   List[str] = []
+        self.times:   List[str] = []
+        self.opens:   List[float] = []
+        self.highs:   List[float] = []
+        self.lows:    List[float] = []
+        self.closes:  List[float] = []
+        self.volumes: List[float] = []
 
-        filename = f'{DATA_PATH}/{ticker}.csv'
-        with open(filename, newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                row_lower = {key.lower(): value for key, value in row.items()}
+        # Load into a DataFrame
+        if isinstance(source, str):
+            filename = f'{DATA_PATH}/{source}'
+            df = pd.read_csv(filename)
+        elif isinstance(source, pd.DataFrame):
+            df = source.copy()
+        else:
+            raise TypeError("source must be a ticker string or a pandas DataFrame")
 
-                date_key = next((k for k in row_lower if 'date' in k), None)
-                time_key = next((k for k in row_lower if 'time' in k), None)
+        timezone_string = re.compile(r'([+-]\d{2}:\d{2})$')
 
-                date_value = row_lower[date_key] if date_key else "N/A"
-                time_value = row_lower[time_key] if time_key else "N/A"
+        df = df.reset_index()
 
-                required_fields = ['open', 'high', 'low', 'close', 'volume']
-                numeric_values = {}
-                for field in required_fields:
-                    if field not in row_lower:
-                        raise KeyError(f"Missing '{field}' column in CSV file")
-                    try:
-                        numeric_values[field] = float(row_lower[field])
-                    except ValueError:
-                        raise ValueError(f"Invalid numeric value for '{field}': {row_lower[field]}")
+        df.columns = [col.lower() for col in df.columns]
 
-                candle = Candle(
-                    date=date_value,
-                    time=time_value,
-                    open=numeric_values['open'],
-                    high=numeric_values['high'],
-                    low=numeric_values['low'],
-                    close=numeric_values['close'],
-                    volume=numeric_values['volume']
-                )
+        date_col = next((col for col in df.columns if 'date' in col), None)
+        time_col = next((col for col in df.columns if 'time' in col), None)
 
-                self.candles.append(candle)
-                self.dates.append(candle.date)
-                self.times.append(candle.time)
-                self.opens.append(candle.open)
-                self.highs.append(candle.high)
-                self.lows.append(candle.low)
-                self.closes.append(candle.close)
-                self.volumes.append(candle.volume)
+        required_fields = ['open', 'high', 'low', 'close', 'volume']
+        for field in required_fields:
+            if field not in df.columns:
+                raise KeyError(f"Missing '{field}' column in data source")
+
+        for _, row in df.iterrows():
+            date_value = str(row[date_col]) if date_col else _VOID_STRING
+            time_value = str(row[time_col]) if time_col else _VOID_STRING
+
+            if yf_format:
+                date_value = timezone_string.sub("", date_value)
+                datetime = date_value.split(" ")
+                date_val = datetime[0]
+                time_val = datetime[1]
+
+            try:
+                open_val   = float(row['open'])
+                high_val   = float(row['high'])
+                low_val    = float(row['low'])
+                close_val  = float(row['close'])
+                volume_val = float(row['volume'])
+            except ValueError as e:
+                raise ValueError(f"Invalid numeric value in row: {e}")
+
+            candle = Candle(
+                date=date_val,
+                time=time_val,
+                open=open_val,
+                high=high_val,
+                low=low_val,
+                close=close_val,
+                volume=volume_val
+            )
+
+            self.candles.append(candle)
+            self.dates.append(candle.date)
+            self.times.append(candle.time)
+            self.opens.append(candle.open)
+            self.highs.append(candle.high)
+            self.lows.append(candle.low)
+            self.closes.append(candle.close)
+            self.volumes.append(candle.volume)
+
 
 #####################
 # Data Manipulation #
@@ -281,10 +309,13 @@ def setLen(base: List[T], newsize: int) -> List[T]:
         stretched[len(stretched):len(stretched)] = inter(base[i], base[i + 1], whole - 1)
     stretched.append(base[-1])
 
-    j = 0
     remaining = newsize - len(stretched)
+    if remaining == 0:
+        return stretched
+
     incr = int(len(stretched) / remaining)
 
+    j = 0
     while len(stretched) < newsize:
         stretched.insert(j + 1, inter(stretched[j], stretched[j + 1], 1)[0])
         j += incr + 1
@@ -733,7 +764,7 @@ def rolWin(values: List[T], window: int, method: Callable[[List[T], int], R]) ->
                          f'\nwindow = {window}, len(values) = {len(values)}')
 
     outcomes = []
-    for i in range(0, len(values), window):
+    for i in range(len(values) - window):
         outcomes.append(method(values[i : i + window], i))
 
     return outcomes
@@ -743,7 +774,7 @@ def rolWin(values: List[T], window: int, method: Callable[[List[T], int], R]) ->
 #################
 
 @dataclass
-class Aesthetics:
+class Display:
     """
     Aesthetic settings for plotting functions.
 
@@ -757,16 +788,16 @@ class Aesthetics:
     title: str  = 'Plot'
 
 
-def line(y: List[float], x: List[float] = None, aes: Aesthetics = None) -> None:
+def line(y: List[float], x: List[float] = None, aes: Display = None) -> None:
     """
     Create a line plot of y vs x.
 
     Parameters:
         y (List[float]): Y-values.
         x (List[float], optional): X-values (defaults to index sequence).
-        aes (Aesthetics, optional): Plot styling options.
+        aes (Display, optional): Plot styling options.
     """
-    aes = aes or Aesthetics(title='Line Plot')
+    aes = aes or Display(title='Line Plot')
     x = list(range(len(y))) if x is None else x
     x, y = zip(*sorted(zip(x, y), key=lambda pair: pair[0]))
 
@@ -778,16 +809,16 @@ def line(y: List[float], x: List[float] = None, aes: Aesthetics = None) -> None:
     plt.show()
 
 
-def scat(y: List[float], x: List[float], aes: Aesthetics = None) -> None:
+def scat(y: List[float], x: List[float], aes: Display = None) -> None:
     """
     Create a scatter plot of y vs x.
 
     Parameters:
         y (List[float]): Y-values.
         x (List[float]): X-values.
-        aes (Aesthetics, optional): Plot styling options.
+        aes (Display, optional): Plot styling options.
     """
-    aes = aes or Aesthetics(title='Scatter Plot')
+    aes = aes or Display(title='Scatter Plot')
 
     plt.figure()
     plt.scatter(x, y)
@@ -797,7 +828,7 @@ def scat(y: List[float], x: List[float], aes: Aesthetics = None) -> None:
     plt.show()
 
 
-def hist(values: List[float], bins: int = 10, density: bool = False, aes: Aesthetics = None) -> None:
+def hist(values: List[float], bins: int = 10, density: bool = False, aes: Display = None) -> None:
     """
     Create a histogram of data values.
 
@@ -805,9 +836,9 @@ def hist(values: List[float], bins: int = 10, density: bool = False, aes: Aesthe
         values (List[float]): Data to histogram.
         bins (int): Number of histogram bins.
         density (bool): If True, show probability density.
-        aes (Aesthetics, optional): Plot styling options.
+        aes (Display, optional): Plot styling options.
     """
-    aes = aes or Aesthetics(title='Histogram', xlabel='Value', ylabel='Density' if density else 'Frequency')
+    aes = aes or Display(title='Histogram', xlabel='Value', ylabel='Density' if density else 'Frequency')
 
     plt.figure()
     plt.hist(values, bins=bins, density=density)
@@ -817,7 +848,7 @@ def hist(values: List[float], bins: int = 10, density: bool = False, aes: Aesthe
     plt.show()
 
 
-def histline(values: List[float], y: List[float], density: bool = False, aes: Aesthetics = None) -> None:
+def histline(values: List[float], y: List[float], density: bool = False, aes: Display = None) -> None:
     """
     Create a histogram with an overlaid line plot.
 
@@ -825,9 +856,9 @@ def histline(values: List[float], y: List[float], density: bool = False, aes: Ae
         values (List[float]): Data to histogram.
         y (List[float]): Line values to overlay.
         density (bool): If True, normalize histogram.
-        aes (Aesthetics, optional): Plot styling options.
+        aes (Display, optional): Plot styling options.
     """
-    aes = aes or Aesthetics(title='Histogram + Line', xlabel='Value', ylabel='Density' if density else 'Frequency')
+    aes = aes or Display(title='Histogram + Line', xlabel='Value', ylabel='Density' if density else 'Frequency')
 
     bins = len(y)
     groups = grBounds(values, bins)
@@ -846,16 +877,16 @@ def histline(values: List[float], y: List[float], density: bool = False, aes: Ae
     plt.show()
 
 
-def bar(x: List[T], heights: List[float], aes: Aesthetics = None) -> None:
+def bar(x: List[T], heights: List[float], aes: Display = None) -> None:
     """
     Create a bar chart.
 
     Parameters:
         x (List[T]): Categories for bars.
         heights (List[float]): Heights of bars.
-        aes (Aesthetics, optional): Plot styling options.
+        aes (Display, optional): Plot styling options.
     """
-    aes = aes or Aesthetics(title='Bar Chart', xlabel='Category', ylabel='Value')
+    aes = aes or Display(title='Bar Chart', xlabel='Category', ylabel='Value')
 
     plt.figure()
     plt.bar(x, heights)
@@ -865,31 +896,70 @@ def bar(x: List[T], heights: List[float], aes: Aesthetics = None) -> None:
     plt.show()
 
 
-def distr(values: List[float], aes: Aesthetics = None) -> None:
+def distr(values: List[float], aes: Display = None) -> None:
     """
     Plot the distribution (PDF) of values.
 
     Parameters:
         values (List[float]): Data points.
-        aes (Aesthetics, optional): Plot styling options.
+        aes (Display, optional): Plot styling options.
     """
-    aes = aes or Aesthetics(title='Distribution', xlabel='Value', ylabel='Probability')
+    aes = aes or Display(title='Distribution', xlabel='Value', ylabel='Probability')
     line(y=pdf(values), x=values, aes=aes)
 
 
-def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, aes: Aesthetics = None) -> None:
+def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = True, aes: Display = None) -> None:
+    """
+    Plot multiple lines on the same axes.
+
+    Parameters:
+        ys (List[List[float]]): List of sets of y-coordinates.
+        x (List[float], optional): Shared x-values (defaults to index).
+        autofit (Bool, optional): Automatically adjust lengths of y-coordinate sets to match x-coordinate set
+        aes (Display, optional): Plot styling options.
+
+    Raises:
+        ValueError: If plot type is invalid or data lengths mismatch x.
+    """
+    aes = aes or Display(title='Lines')
+    x = list(range(len(plots[0][1]))) if x is None else x
+
+    if any(len(y) != len(x) for y in ys) and not autofit:
+        raise ValueError(f'At least one of your y-coordinates sets is not the same size as your set of x-coordinates'
+                         f'\nConsider using \'y = setLen(y, len(x))\' or \'autofit=True\' to resolve the issue')
+
+    fig, ax = plt.subplots()
+
+    for y in ys:
+        if autofit:
+            plt.plot(x, setLen(y, len(x)))
+        else:
+            plt.plot(x, y)
+
+    # TODO: Ticks count hardcoded to 10
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+
+    ax.set_xlabel(aes.xlabel)
+    ax.set_ylabel(aes.ylabel)
+    ax.set_title(aes.title)
+    fig.tight_layout()
+    plt.show()
+
+
+def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, aes: Display = None) -> None:
     """
     Plot multiple series on the same axes.
 
     Parameters:
         plots (List[Tuple[str, List[float]]]): List of (plot_type, data) tuples.
         x (List[float], optional): Shared x-values (defaults to index).
-        aes (Aesthetics, optional): Plot styling options.
+        aes (Display, optional): Plot styling options.
 
     Raises:
         ValueError: If plot type is invalid or data lengths mismatch x.
     """
-    aes = aes or Aesthetics(title='Multiplot')
+    aes = aes or Display(title='Multiplot')
     x = list(range(len(plots[0][1]))) if x is None else x
 
     if any(len(y) != len(x) for _, y in plots):
@@ -909,4 +979,93 @@ def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, aes: 
     plt.xlabel(aes.xlabel)
     plt.ylabel(aes.ylabel)
     plt.title(aes.title)
+    plt.show()
+
+
+def candlestick(ohlc: OHLC, width: float = 0.8, xticks: str = 'date', overlays: List[List[float]] = [], labels: List[str] = []) -> None:
+    """
+    Plot candlestick chart from OHLC object.
+
+    Parameters:
+        ohlc (OHLC): Object containing candlestick data.
+        width (float, optional): Display width of each candlestick.
+        xticks (str, optional): 'date', 'time' or 'datetime' to display corresponding tick.
+        overlays (List[List[float]], optional): Collection of y-coordinates to overlay the candlesticks as line plots.
+        labels (List[str], optional): Labels for the overlays, matched by index.
+    """
+    fig, ax = plt.subplots()
+    xs, lbls = [], []
+
+    timezone_string = re.compile(r'([+-]\d{2}:\d{2})$')
+
+    for c in ohlc.candles:
+        # Skip if no date
+        if c.date == _VOID_STRING:
+            continue
+
+        # Build display label pieces
+        date_str = str(c.date)
+        time_str = "" if c.time == _VOID_STRING else str(c.time)
+
+        _date = "date"
+        _time = "time"
+        _empty = ""
+
+        label = f"{date_str if _date in xticks else _empty} {time_str if _time in xticks else _empty}"
+        lbls.append(label)
+
+        xs.append(len(xs))
+
+    for x, o, h, l, c in zip(xs, ohlc.opens, ohlc.highs, ohlc.lows, ohlc.closes):
+        ax.plot([x, x], [l, h], color='black', linewidth=1, zorder=1)
+        bullish = c >= o
+        bottom = o if bullish else c
+        height = max(abs(c - o), 0.01)
+        rect = Rectangle(
+            (x - width/2, bottom),
+            width,
+            height,
+            facecolor=('green' if bullish else 'red'),
+            edgecolor='black',
+            linewidth=0.5,
+            zorder=2
+        )
+        ax.add_patch(rect)
+
+
+    m = len(xs)
+    for i in range(len(overlays)):
+        overlay = overlays[i]
+        k = len(overlay)
+        diff = m - k
+        if diff > 0:
+            x_vals = xs[diff:]
+            y_vals = overlay
+        elif diff < 0:
+            # x_vals = xs
+            # y_vals = overlay[-m:]
+            raise ValueError('Overlay cannot have more datapoints than candles')
+        else:
+            x_vals = xs
+            y_vals = overlay
+
+        ax.plot(x_vals, y_vals, linewidth=1.5, zorder=3, label=labels[i] if i < len(labels) else None)
+
+    # for overlay in overlays:
+    #     ax.plot(xs, setLen(overlay, len(xs)), linewidth=1.5, zorder=3)
+
+    # TODO: Ticks count hardcoded to 10
+    n = len(xs)
+    if n:
+        idxs = np.linspace(0, n - 1, min(10, n), dtype=int)
+        tick_pos = [xs[i] for i in idxs]
+        tick_lbl = [lbls[i] for i in idxs]
+        ax.set_xticks(tick_pos)
+        ax.set_xticklabels(tick_lbl, rotation=45, ha='right')
+
+    ax.set_ylabel('Price')
+    ax.set_title('Candlestick Chart')
+    if len(labels) > 0:
+        ax.legend(loc='best')
+    plt.tight_layout()
     plt.show()
