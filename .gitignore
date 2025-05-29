@@ -1,4 +1,8 @@
 data/
 .DS_Store
 __pycache__/
+docs/build/
+docs/make.bat
+docs/Makefile
+docs/source/
 main.py
