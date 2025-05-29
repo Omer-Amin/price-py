@@ -34,6 +34,4 @@ ppy.hist(daily_returns, bins=30)
 
 Outputs:
 
-![](./images/example_output.png)
-
-![](./images/hist1_output.png)
+![](./images/candle_output.png) ![](./images/hist_output.png)
