@@ -34,4 +34,7 @@ ppy.hist(daily_returns, bins=30)
 
 Outputs:
 
-![](./images/candle_output.png) ![](./images/hist_output.png)
+<p float="left">
+  <img src="./images/candle_output.png" width="45%" />
+  <img src="./images/hist_output.png"   width="45%" /> 
+</p>
