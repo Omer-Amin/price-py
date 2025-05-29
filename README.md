@@ -34,7 +34,6 @@ ppy.hist(daily_returns, bins=30)
 
 Outputs:
 
-<p float="left">
-  <img src="./images/candle_output.png" width="45%" />
-  <img src="./images/hist_output.png"   width="45%" /> 
-</p>
+| Candlestick + SMAs               | Daily returns histogram        |
+|:--------------------------------:|:------------------------------:|
+| ![Candles](./images/candle_output.png) | ![Histogram](./images/hist_output.png) |
