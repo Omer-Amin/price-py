@@ -15,7 +15,7 @@ import pricepy as ppy
 import yfinance as yf
 
 dat = yf.Ticker("MSFT")
-history = dat.history(period='12mo')
+history = dat.history(period='8mo')
 
 candles = ppy.OHLC(history)
 
