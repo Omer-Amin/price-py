@@ -8,7 +8,7 @@ pip install pricepy
 
 ## Example
 
-The following example pulls data using `yfinance` and plots a candlestick chart overlayed with 5 and 10-day simple moving averages:
+The following example pulls data using `yfinance` and plots a candlestick chart overlayed with 5 and 10-day simple moving averages. It also visualizes the distribution of daily returns:
 
 ```python
 import pricepy as ppy
@@ -22,20 +22,16 @@ candles = ppy.OHLC(history)
 sma10 = ppy.sma(candles.closes, 10)
 sma5 = ppy.sma(candles.closes, 5)
 
+# Candlestick chart
 ppy.candlestick(candles, overlays=[sma5, sma10])
-```
 
-Output:
-
-![](./images/example_output.png)
-
-Adding the following lines will also show you the distribution of daily returns:
-
-```python
+# Daily returns distribution
 daily_returns = ppy.logReturns(candles.closes)
 ppy.hist(daily_returns, bins=30)
 ```
 
-Output:
+Outputs:
+
+![](./images/example_output.png)
 
 ![](./images/hist1_output.png)
