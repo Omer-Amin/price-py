@@ -1,4 +1,4 @@
-Pricepy makes price analysis very quick and easy. Suitable for Python beginners.
+For those moments when you randomly get a novel idea and want to quickly test your hypothesis.
 
 [Documentation](https://omer-amin.github.io/pricepy/) | [PyPI](https://pypi.org/project/pricepy/)
 
@@ -10,7 +10,7 @@ pip install pricepy
 
 ## Example
 
-The following example pulls data using `yfinance` and plots a candlestick chart overlayed with 5 and 10-day simple moving averages. It also visualizes the distribution of daily returns:
+**Hypothesis:** When the daily price drops 2 standard deviations below the mean, it will rebound back to the mean within 3 days.
 
 ```python
 import pricepy as ppy
