@@ -1,4 +1,4 @@
-Very simple Python library for analyzing price data
+Pricepy makes price analysis very quick and easy. Suitable for Python beginners.
 
 ## Installation
 
