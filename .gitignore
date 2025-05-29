@@ -2,3 +2,4 @@ AAPL.csv
 AAPL-1m.csv
 .DS_Store
 __pycache__/
+main.py

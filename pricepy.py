@@ -16,7 +16,7 @@ R = TypeVar('R')
 
 ALLOW_INFINITY = False
 WARN_INFINITY = True
-DATA_PATH = './'
+DATA_PATH = './data'
 
 #######################
 # Warnings and Errors #
@@ -121,7 +121,7 @@ class OHLC:
         self.closes =  []
         self.volumes = []
 
-        filename = f'{ticker}.csv'
+        filename = f'{DATA_PATH}/{ticker}.csv'
         with open(filename, newline='') as f:
             for row in csv.DictReader(f):
                 candle = Candle(
