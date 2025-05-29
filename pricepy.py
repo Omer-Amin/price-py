@@ -17,7 +17,7 @@ from matplotlib.ticker import MaxNLocator
 T = TypeVar('T')
 R = TypeVar('R')
 
-_VOID_STRING = "_NA"
+_VOID_STRING = "_ppy_NA"
 
 ##########
 # Config #
@@ -25,6 +25,10 @@ _VOID_STRING = "_NA"
 
 ALLOW_INFINITY = False
 WARN_INFINITY = True
+
+WARN_DATA_MODIFY = True
+ALLOW_DATA_MODIFY = True
+
 DATA_PATH = './data'
 
 #######################
@@ -32,12 +36,6 @@ DATA_PATH = './data'
 #######################
 
 def _WARN_INFINITY(override: bool = False) -> None:
-    """
-    Internal helper to issue a warning when an infinite value is produced.
-
-    Parameters:
-        override (bool): If True, force the warning even if WARN_INFINITY is False.
-    """
     if WARN_INFINITY:
         warnings.warn(
             'An infinite value was produced'
@@ -53,15 +51,6 @@ def _WARN_INFINITY(override: bool = False) -> None:
 
 
 def _ERROR_INFINITY(override: bool = False) -> None:
-    """
-    Internal helper to raise an error when an infinite value is produced.
-
-    Parameters:
-        override (bool): If True, force an error even if ALLOW_INFINITY is True.
-
-    Raises:
-        ValueError: When infinite values are not allowed.
-    """
     if not ALLOW_INFINITY:
         raise ValueError(
             'An infinite value was produced'
@@ -71,6 +60,15 @@ def _ERROR_INFINITY(override: bool = False) -> None:
         warnings.warn(
             'An infinite value was produced'
             '\n(This is a forced error message and cannot be disabled)',
+            UserWarning
+        )
+
+def _WARN_DATA_MODIFY() -> None:
+    if WARN_DATA_MODIFY:
+        warnings.warn(
+            'A plot is using a modified version of your data. This was likely done to fill in missing data points using linear interpolation'
+            '\nTo disable this warning, use \'WARN_DATA_MODIFY = False\''
+            '\nTo disable this behaviour, pass the argument \'autofit=False\' into your plot method',
             UserWarning
         )
 
@@ -84,7 +82,7 @@ class Candle:
     Represents a single OHLC (Open-High-Low-Close) data point.
 
     Attributes:
-        date (str): Date of the candle in DD-MM-YYYY format.
+        date (str): Date of the candle in YYY-MM-DD format.
         time (str): Time of the candle in HH:MM:SS format.
         open (float): Opening price.
         high (float): Highest price.
@@ -776,7 +774,7 @@ def rolWin(values: List[T], window: int, method: Callable[[List[T], int], R]) ->
 @dataclass
 class Display:
     """
-    Aesthetic settings for plotting functions.
+    dispthetic settings for plotting functions.
 
     Attributes:
         xlabel (str): Label for the x-axis.
@@ -788,47 +786,47 @@ class Display:
     title: str  = 'Plot'
 
 
-def line(y: List[float], x: List[float] = None, aes: Display = None) -> None:
+def line(y: List[float], x: List[float] = None, disp: Display = None) -> None:
     """
     Create a line plot of y vs x.
 
     Parameters:
         y (List[float]): Y-values.
         x (List[float], optional): X-values (defaults to index sequence).
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
     """
-    aes = aes or Display(title='Line Plot')
+    disp = disp or Display(title='Line Plot')
     x = list(range(len(y))) if x is None else x
     x, y = zip(*sorted(zip(x, y), key=lambda pair: pair[0]))
 
     plt.figure()
     plt.plot(x, y)
-    plt.xlabel(aes.xlabel)
-    plt.ylabel(aes.ylabel)
-    plt.title(aes.title)
+    plt.xlabel(disp.xlabel)
+    plt.ylabel(disp.ylabel)
+    plt.title(disp.title)
     plt.show()
 
 
-def scat(y: List[float], x: List[float], aes: Display = None) -> None:
+def scat(y: List[float], x: List[float], disp: Display = None) -> None:
     """
     Create a scatter plot of y vs x.
 
     Parameters:
         y (List[float]): Y-values.
         x (List[float]): X-values.
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
     """
-    aes = aes or Display(title='Scatter Plot')
+    disp = disp or Display(title='Scatter Plot')
 
     plt.figure()
     plt.scatter(x, y)
-    plt.xlabel(aes.xlabel)
-    plt.ylabel(aes.ylabel)
-    plt.title(aes.title)
+    plt.xlabel(disp.xlabel)
+    plt.ylabel(disp.ylabel)
+    plt.title(disp.title)
     plt.show()
 
 
-def hist(values: List[float], bins: int = 10, density: bool = False, aes: Display = None) -> None:
+def hist(values: List[float], bins: int = 10, density: bool = False, disp: Display = None) -> None:
     """
     Create a histogram of data values.
 
@@ -836,19 +834,19 @@ def hist(values: List[float], bins: int = 10, density: bool = False, aes: Displa
         values (List[float]): Data to histogram.
         bins (int): Number of histogram bins.
         density (bool): If True, show probability density.
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
     """
-    aes = aes or Display(title='Histogram', xlabel='Value', ylabel='Density' if density else 'Frequency')
+    disp = disp or Display(title='Histogram', xlabel='Value', ylabel='Density' if density else 'Frequency')
 
     plt.figure()
     plt.hist(values, bins=bins, density=density)
-    plt.xlabel(aes.xlabel)
-    plt.ylabel(aes.ylabel)
-    plt.title(aes.title)
+    plt.xlabel(disp.xlabel)
+    plt.ylabel(disp.ylabel)
+    plt.title(disp.title)
     plt.show()
 
 
-def histline(values: List[float], y: List[float], density: bool = False, aes: Display = None) -> None:
+def histline(values: List[float], y: List[float], density: bool = False, disp: Display = None) -> None:
     """
     Create a histogram with an overlaid line plot.
 
@@ -856,9 +854,9 @@ def histline(values: List[float], y: List[float], density: bool = False, aes: Di
         values (List[float]): Data to histogram.
         y (List[float]): Line values to overlay.
         density (bool): If True, normalize histogram.
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
     """
-    aes = aes or Display(title='Histogram + Line', xlabel='Value', ylabel='Density' if density else 'Frequency')
+    disp = disp or Display(title='Histogram + Line', xlabel='Value', ylabel='Density' if density else 'Frequency')
 
     bins = len(y)
     groups = grBounds(values, bins)
@@ -866,9 +864,9 @@ def histline(values: List[float], y: List[float], density: bool = False, aes: Di
 
     fig, ax1 = plt.subplots()
     ax1.hist(values, bins=bins, density=density)
-    ax1.set_xlabel(aes.xlabel)
-    ax1.set_ylabel(aes.ylabel)
-    ax1.set_title(aes.title)
+    ax1.set_xlabel(disp.xlabel)
+    ax1.set_ylabel(disp.ylabel)
+    ax1.set_title(disp.title)
 
     ax2 = ax1.twinx()
     ax2.plot(x, y)
@@ -877,38 +875,38 @@ def histline(values: List[float], y: List[float], density: bool = False, aes: Di
     plt.show()
 
 
-def bar(x: List[T], heights: List[float], aes: Display = None) -> None:
+def bar(x: List[T], heights: List[float], disp: Display = None) -> None:
     """
     Create a bar chart.
 
     Parameters:
         x (List[T]): Categories for bars.
         heights (List[float]): Heights of bars.
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
     """
-    aes = aes or Display(title='Bar Chart', xlabel='Category', ylabel='Value')
+    disp = disp or Display(title='Bar Chart', xlabel='Category', ylabel='Value')
 
     plt.figure()
     plt.bar(x, heights)
-    plt.xlabel(aes.xlabel)
-    plt.ylabel(aes.ylabel)
-    plt.title(aes.title)
+    plt.xlabel(disp.xlabel)
+    plt.ylabel(disp.ylabel)
+    plt.title(disp.title)
     plt.show()
 
 
-def distr(values: List[float], aes: Display = None) -> None:
+def distr(values: List[float], disp: Display = None) -> None:
     """
     Plot the distribution (PDF) of values.
 
     Parameters:
         values (List[float]): Data points.
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
     """
-    aes = aes or Display(title='Distribution', xlabel='Value', ylabel='Probability')
-    line(y=pdf(values), x=values, aes=aes)
+    disp = disp or Display(title='Distribution', xlabel='Value', ylabel='Probability')
+    line(y=pdf(values), x=values, disp=disp)
 
 
-def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = True, aes: Display = None) -> None:
+def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = False, disp: Display = None) -> None:
     """
     Plot multiple lines on the same axes.
 
@@ -916,22 +914,23 @@ def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = True, ae
         ys (List[List[float]]): List of sets of y-coordinates.
         x (List[float], optional): Shared x-values (defaults to index).
         autofit (Bool, optional): Automatically adjust lengths of y-coordinate sets to match x-coordinate set
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
 
     Raises:
         ValueError: If plot type is invalid or data lengths mismatch x.
     """
-    aes = aes or Display(title='Lines')
+    disp = disp or Display(title='Lines')
     x = list(range(len(plots[0][1]))) if x is None else x
 
     if any(len(y) != len(x) for y in ys) and not autofit:
         raise ValueError(f'At least one of your y-coordinates sets is not the same size as your set of x-coordinates'
-                         f'\nConsider using \'y = setLen(y, len(x))\' or \'autofit=True\' to resolve the issue')
+                         f'\nIf you cannot restructure your data, consider using \'y = setLen(y, len(x))\' or argument \'autofit=True\' as a quick fix (only suitable for visualization, not analysis!)')
 
     fig, ax = plt.subplots()
 
     for y in ys:
-        if autofit:
+        if autofit and len(x) != len(y):
+            _WARN_DATA_MODIFY()
             plt.plot(x, setLen(y, len(x)))
         else:
             plt.plot(x, y)
@@ -940,26 +939,26 @@ def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = True, ae
     ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
 
-    ax.set_xlabel(aes.xlabel)
-    ax.set_ylabel(aes.ylabel)
-    ax.set_title(aes.title)
+    ax.set_xlabel(disp.xlabel)
+    ax.set_ylabel(disp.ylabel)
+    ax.set_title(disp.title)
     fig.tight_layout()
     plt.show()
 
 
-def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, aes: Display = None) -> None:
+def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, disp: Display = None) -> None:
     """
     Plot multiple series on the same axes.
 
     Parameters:
         plots (List[Tuple[str, List[float]]]): List of (plot_type, data) tuples.
         x (List[float], optional): Shared x-values (defaults to index).
-        aes (Display, optional): Plot styling options.
+        disp (Display, optional): Plot styling options.
 
     Raises:
         ValueError: If plot type is invalid or data lengths mismatch x.
     """
-    aes = aes or Display(title='Multiplot')
+    disp = disp or Display(title='Multiplot')
     x = list(range(len(plots[0][1]))) if x is None else x
 
     if any(len(y) != len(x) for _, y in plots):
@@ -973,12 +972,14 @@ def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, aes: 
             plt.plot(x, data)
         elif plot_type == 'scatter':
             plt.scatter(x, data)
+        elif plot_type == 'bar':
+            plt.bar(x, data)
         else:
             raise ValueError(f"'{plot_type}' is not a valid plot type for multiplot")
 
-    plt.xlabel(aes.xlabel)
-    plt.ylabel(aes.ylabel)
-    plt.title(aes.title)
+    plt.xlabel(disp.xlabel)
+    plt.ylabel(disp.ylabel)
+    plt.title(disp.title)
     plt.show()
 
 
