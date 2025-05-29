@@ -1,5 +1,4 @@
-AAPL.csv
-AAPL-1m.csv
+data/
 .DS_Store
 __pycache__/
 main.py

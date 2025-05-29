@@ -265,11 +265,9 @@ def setLen(base: List[T], newsize: int) -> List[T]:
     remaining = newsize - len(stretched)
     incr = int(len(stretched) / remaining)
 
-    print(incr)
-
     while len(stretched) < newsize:
-        stretched.insert(incr * j + 1, inter(stretched[incr * j], stretched[incr * j + 1], 1)[0])
-        j += 2
+        stretched.insert(j + 1, inter(stretched[j], stretched[j + 1], 1)[0])
+        j += incr + 1
 
     return stretched
 
@@ -385,6 +383,29 @@ def corr(x: List[float], y: List[float]) -> float:
         raise ValueError('Lists must be non-empty')
 
     return float(np.corrcoef(x, y)[0, 1])
+
+
+def sma(values: List[float], period: int) -> List[float]:
+    """
+    Get the rolling simple moving average.
+
+    Parameters:
+        values (List[float]): Data points.
+        period (int): Size of rolling window to compute SMA.
+
+    Returns:
+        List[float]: Rolling SMA values.
+
+    Raises:
+        ValueError: If period < 1 or values is empty
+    """
+    if len(values) == 0:
+        raise ValueError('List must be non-empty')
+    if period < 1:
+        raise ValueError('Period must be greater than 0')
+
+    return rolWin(values, period, lambda v, i: mean(v))
+
 
 ########################
 # Price Trend Analysis #
@@ -685,14 +706,15 @@ def rolWin(values: List[T], window: int, method: Callable[[List[T], int], R]) ->
         List[R]: List of outcomes from custom method over each window.
 
     Raises:
-        ValueError: If window < 1.
+        ValueError: If window < 1 or window > len(values).
     """
-    if window < 1:
-        raise ValueError('Window cannot be smaller than 1')
+    if window < 1 or window > len(values):
+        raise ValueError(f'Window must be less than the length of your values list and at least 1'
+                         f'\nwindow = {window}, len(values) = {len(values)}')
 
     outcomes = []
-    for i in range(len(values) - window):
-        outcomes.append(method(values[i * window : (i + 1) + window], i * window))
+    for i in range(0, len(values), window):
+        outcomes.append(method(values[i : i + window], i))
 
     return outcomes
 
@@ -850,7 +872,12 @@ def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, aes: 
     aes = aes or Aesthetics(title='Multiplot')
     x = list(range(len(plots[0][1]))) if x is None else x
 
+    if any(len(y) != len(x) for _, y in plots):
+        raise ValueError(f'At least one of your y-coordinates sets is not the same size as your set of x-coordinates'
+                         f'\nConsider using \'y = setLen(y, len(x))\' to resolve the issue')
+
     plt.figure()
+
     for plot_type, data in plots:
         if plot_type == 'line':
             plt.plot(x, data)
