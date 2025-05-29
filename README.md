@@ -32,7 +32,7 @@ daily_returns = ppy.logReturns(candles.closes)
 ppy.hist(daily_returns, bins=30)
 ```
 
-Outputs:
+### Outputs:
 
 | Candlestick + SMAs               | Daily returns histogram        |
 |:--------------------------------:|:------------------------------:|
