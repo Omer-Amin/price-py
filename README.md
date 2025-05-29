@@ -27,13 +27,15 @@ ppy.candlestick(candles, overlays=[sma5, sma10])
 
 Output:
 
-![MSFT daily candles with 5 and 10 day SMAs](./images/example_output.png)
+![](./images/example_output.png)
 
-Adding the following code will also show you the distribution of daily returns:
+Adding the following lines will also show you the distribution of daily returns:
 
 ```python
 daily_returns = ppy.logReturns(candles.closes)
 ppy.hist(daily_returns, bins=30)
 ```
 
-![](./images/hist_output.png)
+Output:
+
+![](./images/hist1_output.png)
