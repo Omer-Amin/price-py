@@ -1,5 +1,7 @@
 Pricepy makes price analysis very quick and easy. Suitable for Python beginners.
 
+[Documentation](https://omer-amin.github.io/pricepy/)
+
 ## Installation
 
 ```bash
