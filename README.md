@@ -8,14 +8,14 @@ pip install pricepy
 
 ## Example
 
-Example with `yfinance`:
+The following example pulls data using `yfinance` and plots a candlestick chart overlayed with 5 and 10-day simple moving averages:
 
 ```python
 import pricepy as ppy
 import yfinance as yf
 
 dat = yf.Ticker("MSFT")
-history = dat.history(period='10mo')
+history = dat.history(period='12mo')
 
 candles = ppy.OHLC(history)
 
@@ -24,3 +24,7 @@ sma5 = ppy.sma(candles.closes, 5)
 
 ppy.candlestick(candles, overlays=[sma5, sma10])
 ```
+
+Output:
+
+![MSFT daily candles with 5 and 10 day SMAs](./images/example_output.png)
