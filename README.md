@@ -1,4 +1,4 @@
-For those moments when you randomly get a novel idea and want to quickly test your hypothesis.
+For quick price analysis
 
 [Documentation](https://omer-amin.github.io/pricepy/) | [PyPI](https://pypi.org/project/pricepy/)
 
@@ -10,7 +10,7 @@ pip install pricepy
 
 ## Example
 
-**Hypothesis:** When the daily price drops 2 standard deviations below the mean, it will rebound back to the mean within 3 days.
+The following example analyses the distribution of daily returns and how they correlate with moving average crossovers.
 
 ```python
 import pricepy as ppy
