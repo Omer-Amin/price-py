@@ -10,7 +10,7 @@ pip install pricepy
 
 ## Example
 
-**Hypothesis:** When the daily price drops 2 standard deviations below the mean, it will rebound back to the mean within 3 days.
+**Hypothesis:** *When the daily price drops 2 standard deviations below the mean, it will rebound back to the mean within 3 days.*
 
 ```python
 import pricepy as ppy
