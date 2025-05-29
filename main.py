@@ -8,6 +8,6 @@ sma = setLen(ma, len(prices))
 
 multiplot([
     ('line', prices),
-    ('line', ma)
+    ('line', sma)
 ])
 

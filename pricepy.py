@@ -123,16 +123,36 @@ class OHLC:
 
         filename = f'{DATA_PATH}/{ticker}.csv'
         with open(filename, newline='') as f:
-            for row in csv.DictReader(f):
+            reader = csv.DictReader(f)
+            for row in reader:
+                row_lower = {key.lower(): value for key, value in row.items()}
+
+                date_key = next((k for k in row_lower if 'date' in k), None)
+                time_key = next((k for k in row_lower if 'time' in k), None)
+
+                date_value = row_lower[date_key] if date_key else "N/A"
+                time_value = row_lower[time_key] if time_key else "N/A"
+
+                required_fields = ['open', 'high', 'low', 'close', 'volume']
+                numeric_values = {}
+                for field in required_fields:
+                    if field not in row_lower:
+                        raise KeyError(f"Missing '{field}' column in CSV file")
+                    try:
+                        numeric_values[field] = float(row_lower[field])
+                    except ValueError:
+                        raise ValueError(f"Invalid numeric value for '{field}': {row_lower[field]}")
+
                 candle = Candle(
-                    date   = 'ignore for now', #row['Date']
-                    time   = 'ignore for now', #row['Time']
-                    open   = float(row['Open']),
-                    high   = float(row['High']),
-                    low    = float(row['Low']),
-                    close  = float(row['Close']),
-                    volume = float(row['Volume'])
+                    date=date_value,
+                    time=time_value,
+                    open=numeric_values['open'],
+                    high=numeric_values['high'],
+                    low=numeric_values['low'],
+                    close=numeric_values['close'],
+                    volume=numeric_values['volume']
                 )
+
                 self.candles.append(candle)
                 self.dates.append(candle.date)
                 self.times.append(candle.time)
