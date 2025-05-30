@@ -10,30 +10,45 @@ pip install pricepy
 
 ## Example
 
-The following example analyses the distribution of daily returns and how they correlate with moving average crossovers.
+The following example analyses how moving average crossovers correlate with the distribution of daily returns.
 
 ```python
 import pricepy as ppy
 import yfinance as yf
 
-dat = yf.Ticker("MSFT")
-history = dat.history(period='8mo')
+# Fetch data with yfinance
+dat     = yf.Ticker("AAPL")
+history = dat.history(period="30d", interval="1h")
 
+# Extract candle data
 candles = ppy.OHLC(history)
+closes  = candles.closes
+returns = ppy.logReturns(candles.closes)
 
-sma10 = ppy.sma(candles.closes, 10)
-sma5 = ppy.sma(candles.closes, 5)
+# Compute moving averages
+sma10 = ppy.sma(closes, 10)
+sma5  = ppy.sma(closes, 5)
 
-# Candlestick chart
-ppy.candlestick(candles, overlays=[sma5, sma10])
+# Split candlestick data by condition
+condition = ppy.Condition(sma10, '<', sma5)
+pos, neg  = ppy.split(returns, condition)
 
-# Daily returns distribution
-daily_returns = ppy.logReturns(candles.closes)
-ppy.hist(daily_returns, bins=30)
+# Compute distributions
+xp, yp = ppy.distribution(pos)
+xn, yn = ppy.distribution(neg)
+
+# Plot distributions
+ppy.multiplot([
+    ('sma10 < sma5', 'mountain', xp, yp),
+    ('sma10 > sma5', 'mountain', xn, yn)
+], disp=ppy.Display(xlabel="Return", ylabel="Probability", title="Distributions"))
+
+# Plot candles
+ppy.candlestick(candles, overlays=[sma5, sma10], labels=['sma5', 'sma10'])
 ```
 
 ### Outputs:
 
-| Candlestick + SMAs               | Daily returns histogram        |
+| Candlestick + SMAs               | Conditional distributions      |
 |:--------------------------------:|:------------------------------:|
-| ![Candles](./images/candle_output.png) | ![Histogram](./images/hist_output.png) |
+| ![Candles](./images/candle_output.png) | ![Histogram](./images/dist_output.png) |

@@ -13,6 +13,7 @@ from matplotlib.patches import Rectangle
 import matplotlib.ticker as mtick
 from dateutil import parser as date_parser
 from matplotlib.ticker import MaxNLocator
+from scipy.stats import gaussian_kde
 
 T = TypeVar('T')
 R = TypeVar('R')
@@ -125,6 +126,7 @@ class OHLC:
         self.lows:    List[float] = []
         self.closes:  List[float] = []
         self.volumes: List[float] = []
+        self.returns: List[float] = []
 
         # Load into a DataFrame
         if isinstance(source, str):
@@ -186,6 +188,57 @@ class OHLC:
             self.lows.append(candle.low)
             self.closes.append(candle.close)
             self.volumes.append(candle.volume)
+            self.returns.append(math.log(candle.close / candle.open))
+
+
+#################
+# Data Analysis #
+#################
+
+
+class Condition:
+    def __init__(self, listA: List[float], operator: str, listB: List[float]):
+        self.listA = listA[:]
+        self.listB = listB[:]
+        self.operator = operator
+
+        lA = len(listA)
+        lB = len(listB)
+
+        if lA < lB:
+            self.listB = listB[lB - lA:]
+        elif lA > lB:
+            self.listA = listA[lA - lB:]
+
+        if operator == '<':
+            self.result = [self.listA[i] < self.listB[i] for i in range(len(self.listA))]
+        elif operator == '>':
+            self.result = [self.listA[i] > self.listB[i] for i in range(len(self.listA))]
+        elif operator == '==':
+            self.result = [self.listA[i] == self.listB[i] for i in range(len(self.listA))]
+        elif operator == '<=':
+            self.result = [self.listA[i] <= self.listB[i] for i in range(len(self.listA))]
+        elif operator == '>=':
+            self.result = [self.listA[i] >= self.listB[i] for i in range(len(self.listA))]
+
+
+def split(values: List[T], condition: Condition) -> Tuple[List[T], List[T]]:
+    vals = values[:]
+    lcr = len(condition.result)
+
+    if len(values) > lcr:
+        vals = values[len(values) - lcr:]
+
+    positives = []
+    negatives = []
+
+    for i in range(lcr):
+        if condition.result[i]:
+            positives.append(vals[i])
+        else:
+            negatives.append(vals[i])
+
+    return positives, negatives
 
 
 #####################
@@ -196,6 +249,32 @@ class OHLC:
 def dropsd(values: List[float], n: float = 1.5) -> List[float]:
     """
     Remove values outside n standard deviations from the mean.
+
+    Parameters:
+        values (List[float]): Input list of numbers.
+        n (float): Number of standard deviations for filtering (must be >=0).
+
+    Returns:
+        List[float]: Filtered list of values within the specified range.
+
+    Raises:
+        ValueError: If n is negative.
+    """
+    if n < 0:
+        raise ValueError('Cannot have negative n value')
+
+    mu = mean(values)
+    bound = n * sd(values)
+    keep = []
+    for value in values:
+        if value <= mu + bound and value >= mu - bound:
+            keep.append(value)
+    return keep
+
+
+def dropOutliers(values: List[float], n: float = 1.5) -> List[float]:
+    """
+    Alias for dropsd.
 
     Parameters:
         values (List[float]): Input list of numbers.
@@ -349,29 +428,6 @@ def inter(a: float, b: float, points: int = 1) -> List[float]:
 ##############
 # Statistics #
 ##############
-
-
-def pdf(values: List[float]) -> List[float]:
-    """
-    Compute the probability density function (Gaussian) normalized over the data.
-
-    Parameters:
-        values (List[float]): Data points.
-
-    Returns:
-        List[float]: Normalized PDF values summing to 1.
-
-    Raises:
-        ValueError: If values list is empty.
-    """
-    if len(values) == 0:
-        raise ValueError('List must be non-empty')
-
-    x = np.array(values, dtype=float)
-    z = (x - x.mean()) / x.std(ddof=0)
-    pdf_vals = np.exp(-0.5 * z**2) / np.sqrt(2 * np.pi)
-    probs = pdf_vals / pdf_vals.sum()
-    return probs.tolist()
 
 
 def sd(values: List[float]) -> float:
@@ -786,7 +842,7 @@ class Display:
     title: str  = 'Plot'
 
 
-def line(y: List[float], x: List[float] = None, disp: Display = None) -> None:
+def line(y: List[float], x: List[float] = None, mountain: bool = False, disp: Display = None) -> None:
     """
     Create a line plot of y vs x.
 
@@ -804,6 +860,8 @@ def line(y: List[float], x: List[float] = None, disp: Display = None) -> None:
     plt.xlabel(disp.xlabel)
     plt.ylabel(disp.ylabel)
     plt.title(disp.title)
+    if mountain:
+        plt.fill_between(x, y, alpha=0.3)
     plt.show()
 
 
@@ -894,19 +952,18 @@ def bar(x: List[T], heights: List[float], disp: Display = None) -> None:
     plt.show()
 
 
-def distr(values: List[float], disp: Display = None) -> None:
-    """
-    Plot the distribution (PDF) of values.
+def distribution(values: List[float], points: int = 200, tightness: float = 0.5) -> Tuple[float, float]:
+    kde = gaussian_kde(values, bw_method=tightness)
+    xs = np.linspace(min(values), max(values), points)
+    ys = kde(xs)
 
-    Parameters:
-        values (List[float]): Data points.
-        disp (Display, optional): Plot styling options.
-    """
-    disp = disp or Display(title='Distribution', xlabel='Value', ylabel='Probability')
-    line(y=pdf(values), x=values, disp=disp)
+    dx = xs[1] - xs[0]
+    ys = ys * dx
+
+    return xs, ys
 
 
-def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = False, disp: Display = None) -> None:
+def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = False, mountain: bool = False, disp: Display = None) -> None:
     """
     Plot multiple lines on the same axes.
 
@@ -920,6 +977,7 @@ def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = False, d
         ValueError: If plot type is invalid or data lengths mismatch x.
     """
     disp = disp or Display(title='Lines')
+
     x = list(range(len(plots[0][1]))) if x is None else x
 
     if any(len(y) != len(x) for y in ys) and not autofit:
@@ -931,9 +989,14 @@ def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = False, d
     for y in ys:
         if autofit and len(x) != len(y):
             _WARN_DATA_MODIFY()
-            plt.plot(x, setLen(y, len(x)))
+            ny = setLen(y, len(x))
+            plt.plot(x, ny)
+            if mountain:
+                plt.fill_between(x, ny, alpha=0.3)
         else:
             plt.plot(x, y)
+            if mountain:
+                plt.fill_between(x, y, alpha=0.3)
 
     # TODO: Ticks count hardcoded to 10
     ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
@@ -946,40 +1009,38 @@ def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = False, d
     plt.show()
 
 
-def multiplot(plots: List[Tuple[str, List[float]]], x: List[float] = None, disp: Display = None) -> None:
+# TODO: edit description
+def multiplot(plots: List[Tuple[str, str, List[float], List[float]]], disp: Display = None) -> None:
     """
     Plot multiple series on the same axes.
 
     Parameters:
-        plots (List[Tuple[str, List[float]]]): List of (plot_type, data) tuples.
-        x (List[float], optional): Shared x-values (defaults to index).
+        plots (List[Tuple[str, str, List[float], List[float]]]): List of (label, plot_type, xcoords, ycoords) tuples.
         disp (Display, optional): Plot styling options.
-
-    Raises:
-        ValueError: If plot type is invalid or data lengths mismatch x.
     """
     disp = disp or Display(title='Multiplot')
-    x = list(range(len(plots[0][1]))) if x is None else x
-
-    if any(len(y) != len(x) for _, y in plots):
-        raise ValueError(f'At least one of your y-coordinates sets is not the same size as your set of x-coordinates'
-                         f'\nConsider using \'y = setLen(y, len(x))\' to resolve the issue')
 
     plt.figure()
 
-    for plot_type, data in plots:
+    for label, plot_type, dataX, dataY in plots:
         if plot_type == 'line':
-            plt.plot(x, data)
+            dataX, dataY = zip(*sorted(zip(dataX, dataY), key=lambda pair: pair[0]))
+            plt.plot(dataX, dataY, label=label)
+        elif plot_type == 'mountain':
+            dataX, dataY = zip(*sorted(zip(dataX, dataY), key=lambda pair: pair[0]))
+            plt.plot(dataX, dataY, label=label)
+            plt.fill_between(dataX, dataY, alpha=0.3)
         elif plot_type == 'scatter':
-            plt.scatter(x, data)
+            plt.scatter(dataX, dataY, label=label)
         elif plot_type == 'bar':
-            plt.bar(x, data)
+            plt.bar(dataX, dataY, label=label)
         else:
             raise ValueError(f"'{plot_type}' is not a valid plot type for multiplot")
 
     plt.xlabel(disp.xlabel)
     plt.ylabel(disp.ylabel)
     plt.title(disp.title)
+    plt.legend()
     plt.show()
 
 
