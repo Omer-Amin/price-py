@@ -49,8 +49,8 @@ ppy.candlestick(candles, overlays=[sma5, sma10], labels=['sma5', 'sma10'])
 
 ### Outputs:
 
-| Candlestick + SMAs               | Conditional distributions      |
+| Candlestick + SMAs               | Distributions                  |
 |:--------------------------------:|:------------------------------:|
 | ![Candles](./images/candle_output.png) | ![Histogram](./images/dist_output.png) |
 
-The distributions show that, on average, daily returns are more bearish when the 10-day moving average is less than the 5-day moving average.
+The distributions show that, on average, historical daily returns are more bearish when the 10-day moving average is less than the 5-day moving average.
