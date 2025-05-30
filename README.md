@@ -1,4 +1,4 @@
-For quick price analysis
+For quick price analysis using statistically robust methods.
 
 [Documentation](https://omer-amin.github.io/pricepy/) | [PyPI](https://pypi.org/project/pricepy/)
 
@@ -52,3 +52,5 @@ ppy.candlestick(candles, overlays=[sma5, sma10], labels=['sma5', 'sma10'])
 | Candlestick + SMAs               | Conditional distributions      |
 |:--------------------------------:|:------------------------------:|
 | ![Candles](./images/candle_output.png) | ![Histogram](./images/dist_output.png) |
+
+The distributions show that, on average, daily returns are more bearish when the 10-day moving average is less than the 5-day moving average.
