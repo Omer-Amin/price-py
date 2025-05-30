@@ -13,7 +13,7 @@ from matplotlib.patches import Rectangle
 import matplotlib.ticker as mtick
 from dateutil import parser as date_parser
 from matplotlib.ticker import MaxNLocator
-from scipy.stats import gaussian_kde
+from scipy import stats
 
 T = TypeVar('T')
 R = TypeVar('R')
@@ -512,6 +512,40 @@ def sma(values: List[float], period: int) -> List[float]:
     return rolWin(values, period, lambda v, i: mean(v))
 
 
+def wttest(sample1: List[float], sample2: List[float], alpha: float = 0.05, result: bool = True):
+    """
+    Perform Welch’s t-test (unequal variances) on two independent samples.
+
+    Parameters:
+    -----------
+    sample1 : array-like
+        First list or array of observations.
+    sample2 : array-like
+        Second list or array of observations.
+    alpha : float, optional (default=0.05)
+        Significance level for rejecting the null hypothesis.
+
+    Returns:
+    --------
+    t_stat : float
+        The computed Welch’s t-statistic.
+    p_value : float
+        The two-tailed p-value for the test.
+    reject_null : bool
+        True if p_value < alpha (reject H₀: μ₁ = μ₂), False otherwise.
+    """
+    # Perform Welch’s t-test (unequal variances)
+    t_stat, p_value = stats.ttest_ind(sample1, sample2, equal_var=False)
+
+    if result:
+        if p_value < alpha:
+            print(f'Welch\'s t-test: {p_value:.3f} < {alpha} => Reject null hypothesis, means are not statistically equal')
+        else:
+            print(f'Welch\'s t-test: {p_value:.3f} > {alpha} => Accept null hypothesis, means are statistically equal')
+    
+    return t_stat, p_value
+
+
 ########################
 # Price Trend Analysis #
 ########################
@@ -952,15 +986,21 @@ def bar(x: List[T], heights: List[float], disp: Display = None) -> None:
     plt.show()
 
 
-def distribution(values: List[float], points: int = 200, tightness: float = 0.5) -> Tuple[float, float]:
-    kde = gaussian_kde(values, bw_method=tightness)
-    xs = np.linspace(min(values), max(values), points)
-    ys = kde(xs)
+class Distribution:
+    def __init__(self, values: List[float], points: int = 200, tightness: float = 0.5):
+        kde = stats.gaussian_kde(values, bw_method=tightness)
+        xs = np.linspace(min(values), max(values), points)
+        ys = kde(xs)
 
-    dx = xs[1] - xs[0]
-    ys = ys * dx
+        dx = xs[1] - xs[0]
+        ys = ys * dx
 
-    return xs, ys
+        self.y = ys
+        self.x = xs
+
+        self.mean = sum([ys[i] * xs[i] for i in range(len(ys))])
+        variance = sum((x - self.mean) ** 2 for x in xs) / len(xs)
+        self.sd = math.sqrt(variance)
 
 
 def lines(ys: List[List[float]], x: List[float] = None, autofit: bool = False, mountain: bool = False, disp: Display = None) -> None:
